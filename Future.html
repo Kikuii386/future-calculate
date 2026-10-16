@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body style="margin:0">
+<title>ATR SL/TP Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: two equal panels side by side (inputs | plan), fixed slots so nothing shifts; stacks on phones */
+:root{
+  --bg:#f4ede2; --panel:#fdf8f2; --line:#ddd0bc; --fg:#2d2218; --muted:#8a7660;
+  --accent:#8b5e38; --accent-soft:#f0e4d4;
+  --long:#4e7a40; --long-soft:#e6f2e0; --short:#a84438; --short-soft:#f5e4e1; --warn:#9a6820; --warn-soft:#f7edd6;
+  --f-body:"IBM Plex Sans Thai", "Noto Sans Thai", system-ui, sans-serif;
+  --f-num:"JetBrains Mono", ui-monospace, Menlo, monospace;
+  --btn-w:132px; --gap:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1d1912; --panel:#26201a; --line:#3e3326; --fg:#e8dcc8; --muted:#9a8870;
+  --accent:#d4905a; --accent-soft:#3a2818;
+  --long:#7aaa62; --long-soft:#1a2e16; --short:#d46a58; --short-soft:#301816; --warn:#d4a050; --warn-soft:#302010; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1d1912; --panel:#26201a; --line:#3e3326; --fg:#e8dcc8; --muted:#9a8870;
+  --accent:#d4905a; --accent-soft:#3a2818;
+  --long:#7aaa62; --long-soft:#1a2e16; --short:#d46a58; --short-soft:#301816; --warn:#d4a050; --warn-soft:#302010; color-scheme:dark}
+*{box-sizing:border-box}
+form{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6}
+.wrap{max-width:1040px;margin:0 auto;padding-block:22px 48px;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+header h1{font-size:1.45rem;margin:0}
+.fixed{font-family:var(--f-num);font-size:.78rem;color:var(--muted)}
+
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:stretch}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+
+.cap{font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;color:var(--muted);margin:4px 0 -4px}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap)}
+.withbtn{display:grid;grid-template-columns:minmax(0,1fr) var(--btn-w);gap:var(--gap);align-items:end}
+label{display:flex;flex-direction:column;gap:5px;font-size:.86rem;color:var(--muted);min-width:0}
+input{font:inherit;font-family:var(--f-num);font-size:1rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;height:44px;padding:0 12px;width:100%;min-width:0}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;height:44px}
+.seg button{font:inherit;font-weight:600;border:0;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--f-num);font-size:.95rem}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.seg.dir button{font-family:var(--f-body);font-size:1rem}
+.seg.dir button[data-v="long"][aria-pressed="true"]{background:var(--long-soft);color:var(--long)}
+.seg.dir button[data-v="short"][aria-pressed="true"]{background:var(--short-soft);color:var(--short)}
+.btn{font:inherit;font-weight:600;font-size:.88rem;height:44px;width:var(--btn-w);border-radius:7px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap}
+.btn:disabled{opacity:.55;cursor:wait}
+
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;margin-top:auto}
+.stat{padding:10px 12px;min-width:0;display:flex;flex-direction:column}
+.stat+.stat{border-left:1px solid var(--line)}
+.stat .k{font-size:.74rem;color:var(--muted);display:flex;gap:6px;align-items:center;white-space:nowrap}
+.stat .v{font-family:var(--f-num);font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.dot.ok{background:var(--long)} .dot.err{background:var(--warn)}
+
+.levels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--gap)}
+.lvl{border-radius:10px;padding:11px 14px 12px;display:grid;gap:0;min-width:0}
+.lk{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.lk .k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.lvl.sl{background:var(--short-soft)} .lvl.tp{background:var(--long-soft)}
+.lvl .k{font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700}
+.lvl.sl .k{color:var(--short)} .lvl.tp .k{color:var(--long)}
+.lvl .v{font-family:var(--f-num);font-size:1.4rem;line-height:1.35;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lvl .s{font-size:.78rem;color:var(--muted);font-family:var(--f-num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.copy{flex:none;font:inherit;font-size:.72rem;width:68px;height:24px;padding:0;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+
+.msg{height:58px;overflow:hidden;border-radius:8px;padding:0 14px;font-size:.86rem;line-height:1.5;display:flex;align-items:center;background:var(--bg);color:var(--muted)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+.ladder{min-width:300px;font-size:.92rem}
+@media (max-width:460px){.ladder{font-size:.8rem}.ladder td{padding-left:4px}.pct{width:46px;font-size:.8rem;padding:0 4px}.ladder col.c1{width:14%}.ladder col.c3{width:16%}.ladder col.c5{width:25%}.sum{font-size:.84rem}}
+.ladder col.c1{width:15%} .ladder col.c2{width:24%} .ladder col.c3{width:17%} .ladder col.c4{width:20%} .ladder col.c5{width:24%}
+.ladder th{font-size:.74rem;font-weight:600;color:var(--muted);text-align:right;padding:0 0 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ladder td{height:50px;text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--line);padding:0 0 0 8px;vertical-align:middle}
+.ladder th:first-child,.ladder td:first-child{text-align:left;padding-left:0}
+.ladder td:first-child{font-weight:600;color:var(--long)}
+.ladder td small{display:block;color:var(--muted);font-size:.72rem;line-height:1.2}
+.ladder tr.off td{opacity:.35}
+.ladder tr.tot td{font-weight:600;border-bottom:0;color:var(--fg);height:42px}
+.pct{width:58px;height:32px;padding:0 6px;font-size:.88rem;text-align:right}
+.px{border:0;background:none;font:inherit;color:inherit;padding:0;cursor:pointer;width:100%;text-align:right}
+.px:hover{color:var(--accent)}
+
+.sum{font-size:.92rem}
+.sum td{height:38px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sum td:first-child{width:52%;color:var(--muted)}
+.sum td:last-child{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.sum tr:last-child td{border-bottom:0}
+.neg{color:var(--short)} .pos{color:var(--long)}
+.hright{display:flex;gap:12px;align-items:center}
+.helpbtn{font:inherit;font-size:.82rem;font-weight:600;height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.helpbtn:hover{border-color:var(--accent);color:var(--accent)}
+dialog{border:1px solid var(--line);border-radius:14px;padding:0;background:var(--panel);color:var(--fg);width:min(460px,calc(100vw - 32px));max-height:calc(100vh - 48px)}
+dialog::backdrop{background:rgba(20,14,8,.5)}
+.dlg{padding:20px 22px 22px;display:flex;flex-direction:column;gap:12px;font-size:.92rem}
+.dlg-head{display:flex;justify-content:space-between;align-items:center}
+.dlg h2{font-size:1.15rem;margin:0}
+.dlg h3{font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:6px 0 0}
+.dlg ol,.dlg ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
+.dlg ul{color:var(--muted);font-size:.86rem}
+.x{width:34px;height:34px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:.9rem}
+.btn.ok{width:100%;margin-top:6px;background:var(--accent);color:var(--panel)}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>ATR SL/TP Planner</h1>
+    <div class="hright"><span class="fixed">4h · ATR 3 · SL 2×ATR</span><button type="button" class="helpbtn" id="helpBtn">หมายเหตุ / วิธีใช้</button></div>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <p class="cap">เหรียญ</p>
+      <div class="seg" id="coinSeg">
+        <button type="button" data-v="BTCUSDT">BTC</button>
+        <button type="button" data-v="ETHUSDT">ETH</button>
+        <button type="button" data-v="SOLUSDT" aria-pressed="true">SOL</button>
+      </div>
+      <p class="cap">ทิศทาง</p>
+      <div class="seg dir" id="dirSeg">
+        <button type="button" data-v="long" aria-pressed="true">Long</button>
+        <button type="button" data-v="short">Short</button>
+      </div>
+      <p class="cap">ราคาและ ATR</p>
+      <div class="withbtn">
+        <label>ราคาเข้า<input id="entry" type="number" step="any" inputmode="decimal"></label>
+        <button type="button" class="btn" id="useLast">ราคาล่าสุด</button>
+      </div>
+      <div class="withbtn">
+        <label>ATR 3 · 4h (แก้เองได้)<input id="atr" type="number" step="any" inputmode="decimal"></label>
+        <button type="button" class="btn" id="refresh">รีเฟรช ATR</button>
+      </div>
+      <p class="cap">ไม้นี้</p>
+      <div class="two">
+        <label>Margin (USDT)<input id="margin" type="number" min="0" step="any" inputmode="decimal" value="100"></label>
+        <label>Leverage (x)<input id="lev" type="number" min="1" max="125" step="1" inputmode="numeric" value="10"></label>
+      </div>
+      <p class="cap">TP สุดท้าย (R:R)</p>
+      <div class="seg" id="rrSeg">
+        <button type="button" data-v="1.5" aria-pressed="true">1.5</button>
+        <button type="button" data-v="2">2</button>
+        <button type="button" data-v="3">3</button>
+        <button type="button" data-v="4">4</button>
+        <button type="button" data-v="5">5</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="k"><span class="dot" id="dot"></span>แหล่งข้อมูล</span><span class="v" id="stSrc">–</span></div>
+        <div class="stat"><span class="k">ATR</span><span class="v" id="stAtr">–</span></div>
+        <div class="stat"><span class="k">แท่งปิดล่าสุด</span><span class="v" id="stBar">–</span></div>
+      </div>
+    </form>
+
+    <section class="panel" aria-live="polite">
+      <div class="levels">
+        <div class="lvl sl"><div class="lk"><span class="k">Stop Loss</span><button type="button" class="copy" data-copy="slV">คัดลอก</button></div><span class="v" id="slV">–</span><span class="s" id="slS">&nbsp;</span></div>
+        <div class="lvl tp"><div class="lk"><span class="k">TP สุดท้าย</span><button type="button" class="copy" data-copy="tpV">คัดลอก</button></div><span class="v" id="tpV">–</span><span class="s" id="tpS">&nbsp;</span></div>
+      </div>
+      <div class="msg" id="msg">กำลังดึงข้อมูล…</div>
+      <div class="scroll"><table class="ladder">
+        <colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"></colgroup>
+        <thead><tr><th>TP</th><th>ราคา</th><th>ขาย %</th><th>จำนวน</th><th>กำไร USDT</th></tr></thead>
+        <tbody id="ladder"></tbody>
+      </table></div>
+      <table class="sum"><tbody id="tbl"></tbody></table>
+    </section>
+  </div>
+  <dialog id="help" aria-labelledby="helpTitle">
+    <div class="dlg">
+      <div class="dlg-head"><h2 id="helpTitle">วิธีใช้</h2><button type="button" class="x" id="helpClose" aria-label="ปิด">✕</button></div>
+      <ol>
+        <li>เลือกเหรียญและ Long / Short</li>
+        <li>กด <b>รีเฟรช ATR</b> ระบบจะดึง ATR และราคาล่าสุดมาให้ ถ้าเข้าได้ราคาอื่น ให้แก้ช่องราคาเข้า</li>
+        <li>ใส่ Margin และ Leverage</li>
+        <li>เลือก TP สุดท้าย ระบบจะแบ่งขายทุกระดับตั้งแต่ 1.5R แก้ % ที่ขายได้ในตาราง</li>
+        <li>คลิกที่ราคา SL / TP เพื่อคัดลอก แล้วไปตั้งคำสั่งใน Exchange</li>
+      </ol>
+      <h3>หมายเหตุ</h3>
+      <ul>
+        <li>SL ตั้งที่ 2 × ATR แต่ไม่เกิน 80% ของระยะถึงจุด Liq ถ้าเกินจะดึงเข้ามาให้เอง</li>
+        <li>จุด Liq เป็นค่าประมาณแบบ Isolated ให้เช็กกับ Exchange อีกครั้ง</li>
+        <li>ATR ใช้แท่ง 4h ที่ปิดแล้วเท่านั้น และเปลี่ยนเฉพาะตอนกดรีเฟรชหรือเปลี่ยนเหรียญ</li>
+        <li>กำไรและขาดทุนหักค่าธรรมเนียม 0.05% ต่อฝั่งแล้ว ยังไม่รวม Funding fee</li>
+      </ul>
+      <button type="button" class="btn ok" id="helpOk">เข้าใจแล้ว</button>
+    </div>
+  </dialog>
+</div>
+
+<script>
+(() => {
+  // ===== ค่าที่ fix ไว้ =====
+  const TF = "4h", TF_MS = 14400e3, ATR_LEN = 3, SL_ATR = 2;
+  const MMR = 0.005, LIQ_CAP = 0.8, FEE = 0.0005;
+  const LEVELS = [1.5, 2, 3, 4, 5];
+  const PRESET = { 1: [100], 2: [50, 50], 3: [40, 30, 30], 4: [30, 30, 20, 20], 5: [30, 25, 20, 15, 10] };
+  const SUM_LABELS = ["Liq (ประมาณ)", "ขนาดสัญญา", "มูลค่าสัญญา", "ขาดทุนถ้าโดน SL", "กำไรถ้าถึงทุก TP", "ถึง TP1 แล้วที่เหลือโดน SL", "R:R เฉลี่ยสุทธิ"];
+
+  const $ = id => document.getElementById(id);
+  let sym = "SOLUSDT", dir = "long", rr = 1.5, lastPrice = null, entryAuto = true, splits = null, msgBase = "";
+
+  function press(segId, v) { [...$(segId).children].forEach(b => b.setAttribute("aria-pressed", b.dataset.v === v)); }
+  try { const s = JSON.parse(localStorage.getItem("atrPlanner2") || "{}");
+        if (s.margin) $("margin").value = s.margin; if (s.lev) $("lev").value = s.lev;
+        if (s.rr) { rr = +s.rr; press("rrSeg", String(s.rr)); } } catch (e) {}
+  function save() { try { localStorage.setItem("atrPlanner2", JSON.stringify({ margin: $("margin").value, lev: $("lev").value, rr })); } catch (e) {} }
+
+  // ===== ดึงแท่งเทียน =====
+  async function getJSON(url) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 6000);
+    try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+    finally { clearTimeout(t); }
+  }
+  async function candles() {
+    try {
+      const rows = await getJSON(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${TF}&limit=100`);
+      return { k: rows.map(r => ({ t: r[0], h: +r[2], l: +r[3], c: +r[4] })), src: "Binance" };
+    } catch (e) {
+      const js = await getJSON(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=240&limit=100`);
+      if (js.retCode !== 0) throw new Error(js.retMsg);
+      return { k: js.result.list.map(r => ({ t: +r[0], h: +r[2], l: +r[3], c: +r[4] })).reverse(), src: "Bybit" };
+    }
+  }
+  function calcATR(k, len) {
+    const tr = k.map((x, i) => i === 0 ? x.h - x.l
+      : Math.max(x.h - x.l, Math.abs(x.h - k[i-1].c), Math.abs(x.l - k[i-1].c)));
+    let a = tr.slice(0, len).reduce((s, v) => s + v, 0) / len;
+    for (let i = len; i < tr.length; i++) a = (a * (len - 1) + tr[i]) / len;
+    return a;
+  }
+
+  const dp = p => p >= 1000 ? 2 : p >= 10 ? 3 : p >= 1 ? 4 : 6;
+  const fp = (v, ref) => v.toLocaleString("en-US", { minimumFractionDigits: dp(ref), maximumFractionDigits: dp(ref) });
+  const fu = v => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fs = v => `<span class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : "−"}${fu(Math.abs(v))}</span>`;
+  const fsp = (v, base) => `${v >= 0 ? "+" : "−"}${Math.abs(v / base * 100).toFixed(1)}%`;
+  const fq = q => q.toLocaleString("en-US", { maximumFractionDigits: q >= 100 ? 2 : q >= 1 ? 3 : 4 });
+  const bkk = t => new Date(t).toLocaleString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  async function load() {
+    $("refresh").disabled = true; $("refresh").textContent = "กำลังดึง…";
+    $("dot").className = "dot"; $("stSrc").textContent = "กำลังดึง…";
+    try {
+      const { k, src } = await candles();
+      const closed = k.filter(x => x.t + TF_MS <= Date.now());
+      const atr = calcATR(closed, ATR_LEN);
+      lastPrice = k[k.length - 1].c;
+      $("atr").value = +atr.toPrecision(6);
+      if (entryAuto || !$("entry").value) { $("entry").value = lastPrice; entryAuto = true; }
+      $("dot").className = "dot ok";
+      $("stSrc").textContent = `${src} · ${sym.replace("USDT", "")}`;
+      $("stAtr").textContent = `${fp(atr, lastPrice)} (${(atr / lastPrice * 100).toFixed(2)}%)`;
+      $("stBar").textContent = `${bkk(closed[closed.length - 1].t)} น.`;
+      msgBase = "";
+    } catch (e) {
+      lastPrice = null;
+      $("dot").className = "dot err";
+      $("stSrc").textContent = "ดึงไม่ได้"; $("stAtr").textContent = "กรอกเอง"; $("stBar").textContent = "–";
+      msgBase = "ดึงข้อมูลไม่ได้ ให้กรอกราคาเข้าและ ATR เอง ตัวเลขที่เห็นตอนนี้เป็นตัวอย่าง";
+      if (!$("entry").value) { $("entry").value = 150; $("atr").value = 4.2; }
+    }
+    $("refresh").disabled = false; $("refresh").textContent = "รีเฟรช ATR";
+    calc();
+  }
+
+  function setMsg(text, warn) { const m = $("msg"); m.textContent = text; m.className = "msg" + (warn ? " warn" : ""); }
+  const offRow = (r, i) => `<tr class="off"><td>TP${i + 1}<small>${r}R</small></td><td>–<small>&nbsp;</small></td><td>–<small>&nbsp;</small></td><td>–<small>&nbsp;</small></td><td>–<small>&nbsp;</small></td></tr>`;
+
+  function calc() {
+    save();
+    const entry = +$("entry").value, a = +$("atr").value;
+    const margin = +$("margin").value, lev = Math.min(125, Math.max(1, +$("lev").value || 1));
+    const d = dir === "long" ? 1 : -1;
+    const lv = LEVELS.filter(x => x <= rr);
+    if (!splits || splits.length !== lv.length) splits = PRESET[lv.length].slice();
+    const coin = sym.replace("USDT", "");
+
+    if (!(entry > 0) || !(a > 0) || !(margin > 0)) {
+      $("slV").textContent = $("tpV").textContent = "–"; $("slS").innerHTML = $("tpS").innerHTML = "&nbsp;";
+      $("ladder").innerHTML = LEVELS.map(offRow).join("") + `<tr class="tot"><td>รวม</td><td></td><td>–</td><td>–</td><td>–</td></tr>`;
+      $("tbl").innerHTML = SUM_LABELS.map(t => `<tr><td>${t}</td><td>–</td></tr>`).join("");
+      setMsg(msgBase || "กรอกราคาเข้า, ATR และ Margin", !!msgBase); return;
+    }
+
+    const liq = entry * (1 - d * (1 / lev - MMR));
+    const liqDist = Math.abs(entry - liq);
+    let slDist = SL_ATR * a, capped = false;
+    if (slDist > liqDist * LIQ_CAP) { slDist = liqDist * LIQ_CAP; capped = true; }
+    const sl = entry - d * slDist, tp = entry + d * slDist * rr;
+    const notional = margin * lev, qty = notional / entry;
+    const loss = qty * slDist + FEE * qty * (entry + sl);
+
+    $("slV").textContent = fp(sl, entry); $("tpV").textContent = fp(tp, entry);
+    $("slS").textContent = `${d > 0 ? "−" : "+"}${(slDist / entry * 100).toFixed(2)}%` + (capped ? " · ดึงเข้าจาก Liq" : ` · ${SL_ATR}×ATR`);
+    $("tpS").textContent = `${d > 0 ? "+" : "−"}${(slDist * rr / entry * 100).toFixed(2)}% · ${rr}R`;
+
+    // ----- TP ladder: แสดงครบ 5 แถวเสมอ -----
+    let profit = 0, sumPct = 0, p1 = 0;
+    const rows = LEVELS.map((r, i) => {
+      if (i >= lv.length) return offRow(r, i);
+      const px = entry + d * slDist * r, pct = splits[i], q = qty * pct / 100;
+      const pr = q * slDist * r - FEE * q * (entry + px);
+      profit += pr; sumPct += pct; if (i === 0) p1 = pr;
+      return `<tr><td>TP${i + 1}<small>${r}R</small></td>` +
+        `<td><button type="button" class="px" title="คลิกเพื่อคัดลอก">${fp(px, entry)}</button><small>${d > 0 ? "+" : "−"}${(slDist * r / entry * 100).toFixed(2)}%</small></td>` +
+        `<td><input class="pct" id="pct${i}" data-i="${i}" type="number" min="0" max="100" step="5" value="${pct}"></td>` +
+        `<td>${fq(q)}<small>${coin}</small></td>` +
+        `<td>${fs(pr)}<small>${fsp(pr, margin)}</small></td></tr>`;
+    });
+    rows.push(`<tr class="tot"><td>รวม</td><td></td><td>${sumPct}%</td><td>${fq(qty * sumPct / 100)}</td><td>${fs(profit)}</td></tr>`);
+    $("ladder").innerHTML = rows.join("");
+
+    const tp1ThenSl = p1 - (1 - splits[0] / 100) * loss;
+    const vals = [
+      fp(liq, entry),
+      `${fq(qty)} ${coin}`,
+      `${fu(notional)} USDT`,
+      `<span class="neg">−${fu(loss)} (${(loss / margin * 100).toFixed(1)}%)</span>`,
+      `${fs(profit)} (${fsp(profit, margin)})`,
+      fs(tp1ThenSl),
+      "1 : " + (profit / loss).toFixed(2),
+    ];
+    $("tbl").innerHTML = SUM_LABELS.map((t, i) => `<tr><td>${t}</td><td>${vals[i]}</td></tr>`).join("");
+
+    // ----- ข้อความ (ช่องเดียว ขนาดคงที่) -----
+    if (msgBase) setMsg(msgBase, true);
+    else if (capped) setMsg(`SL ที่ 2×ATR (${(SL_ATR * a / entry * 100).toFixed(2)}%) ไกลกว่าจุด Liq ที่ x${lev} จึงดึงเข้ามาให้ ควรลด Leverage`, true);
+    else if (Math.abs(sumPct - 100) > 0.001) setMsg(`สัดส่วนขายรวมกันได้ ${sumPct}% ต้องเท่ากับ 100%`, true);
+    else setMsg("SL อยู่ก่อนจุด Liq · ตัวเลขเงินทุกช่องเป็น USDT", false);
+  }
+
+  // ===== events =====
+  $("coinSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    sym = b.dataset.v; press("coinSeg", sym); $("entry").value = ""; entryAuto = true; load(); });
+  $("dirSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    dir = b.dataset.v; press("dirSeg", dir); calc(); });
+  $("rrSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    rr = +b.dataset.v; press("rrSeg", b.dataset.v); splits = null; calc(); });
+  $("ladder").addEventListener("change", e => { const el = e.target.closest(".pct"); if (!el) return;
+    splits[+el.dataset.i] = Math.max(0, +el.value || 0); calc(); });
+  $("ladder").addEventListener("click", e => { const b = e.target.closest(".px"); if (!b) return;
+    const t = b.textContent; try { navigator.clipboard.writeText(t.replace(/,/g, "")).then(() => { b.textContent = "คัดลอกแล้ว"; setTimeout(() => b.textContent = t, 1000); }, () => {}); } catch (err) {} });
+  $("useLast").addEventListener("click", () => { if (lastPrice) { $("entry").value = lastPrice; entryAuto = true; calc(); } else load(); });
+  $("entry").addEventListener("input", () => { entryAuto = false; calc(); });
+  ["margin", "lev", "atr"].forEach(id => $(id).addEventListener("input", calc));
+  $("form").addEventListener("submit", e => e.preventDefault());
+  document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", () => {
+    const txt = $(b.dataset.copy).textContent.replace(/,/g, "");
+    try { navigator.clipboard.writeText(txt).then(() => { b.textContent = "คัดลอกแล้ว"; setTimeout(() => b.textContent = "คัดลอก", 1200); }, () => {}); } catch (e) {}
+  }));
+  $("refresh").addEventListener("click", load);
+  const dlg = $("help");
+  $("helpBtn").addEventListener("click", () => { try { dlg.showModal(); } catch (e) { dlg.setAttribute("open", ""); } });
+  ["helpClose", "helpOk"].forEach(id => $(id).addEventListener("click", () => dlg.close()));
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+
+  calc();
+  load();
+})();
+</script>
+
+</body>
+</html>
