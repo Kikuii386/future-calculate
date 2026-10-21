@@ -311,7 +311,12 @@ html{scrollbar-gutter:stable}
     try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
     finally { clearTimeout(t); }
   }
+  // Asterdex first (prices match where orders are placed), then Binance, then Bybit
   async function candles() {
+    try {
+      const rows = await getJSON(`https://fapi.asterdex.com/fapi/v1/klines?symbol=${sym}&interval=${TF}&limit=100`);
+      return { k: rows.map(r => ({ t: r[0], h: +r[2], l: +r[3], c: +r[4] })), src: "Asterdex" };
+    } catch (e) {}
     try {
       const rows = await getJSON(`https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${TF}&limit=100`);
       return { k: rows.map(r => ({ t: r[0], h: +r[2], l: +r[3], c: +r[4] })), src: "Binance" };
@@ -329,8 +334,21 @@ html{scrollbar-gutter:stable}
     return a;
   }
 
-  const dp = p => p >= 1000 ? 2 : p >= 10 ? 3 : p >= 1 ? 4 : 6;
-  const fp = (v, ref) => v.toLocaleString("en-US", { minimumFractionDigits: dp(ref), maximumFractionDigits: dp(ref) });
+  // Price decimals follow the exchange tick size (Asterdex exchangeInfo); guess from the price until it loads or if it fails
+  const TICK = {};
+  async function loadTicks() {
+    try {
+      const js = await getJSON("https://fapi.asterdex.com/fapi/v1/exchangeInfo");
+      for (const x of js.symbols) {
+        const f = x.filters.find(f => f.filterType === "PRICE_FILTER"), t = f && +f.tickSize;
+        if (t > 0) TICK[x.symbol] = { t, d: Math.max(0, Math.round(-Math.log10(t))) };
+      }
+      calc();
+    } catch (e) {}
+  }
+  const dp = p => TICK[sym] ? TICK[sym].d : p >= 1000 ? 2 : p >= 10 ? 3 : p >= 1 ? 4 : 6;
+  const toTick = v => TICK[sym] ? Math.round(v / TICK[sym].t) * TICK[sym].t : v;
+  const fp = (v, ref) => toTick(v).toLocaleString("en-US", { minimumFractionDigits: dp(ref), maximumFractionDigits: dp(ref) });
   const fu = v => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fs = v => `<span class="${v >= 0 ? "pos" : "neg"}">${v >= 0 ? "+" : "−"}${fu(Math.abs(v))}</span>`;
   const fsp = (v, base) => `${v >= 0 ? "+" : "−"}${Math.abs(v / base * 100).toFixed(1)}%`;
@@ -456,6 +474,7 @@ html{scrollbar-gutter:stable}
 
   calc();
   load();
+  loadTicks();
 })();
 </script>
 <script>
