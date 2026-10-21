@@ -458,7 +458,17 @@ html{scrollbar-gutter:stable}
     splits[+el.dataset.i] = Math.max(0, +el.value || 0); calc(); });
   $("ladder").addEventListener("click", e => { const b = e.target.closest(".px"); if (!b) return;
     const t = b.textContent; try { navigator.clipboard.writeText(t.replace(/,/g, "")).then(() => { b.textContent = "คัดลอกแล้ว"; setTimeout(() => b.textContent = t, 1000); }, () => {}); } catch (err) {} });
-  $("useLast").addEventListener("click", () => { if (lastPrice) { $("entry").value = lastPrice; entryAuto = true; calc(); } else load(); });
+  // ราคาล่าสุด: ดึงราคาสดจาก Asterdex (ไม่แตะ ATR) ถ้าดึงไม่ได้ใช้ราคาปิดแท่งล่าสุดที่มีอยู่
+  $("useLast").addEventListener("click", async () => {
+    const b = $("useLast"); b.disabled = true; b.textContent = "กำลังดึง…";
+    try {
+      const js = await getJSON(`https://fapi.asterdex.com/fapi/v1/ticker/price?symbol=${sym}`);
+      if (!(+js.price > 0)) throw new Error("no price");
+      lastPrice = +js.price; $("entry").value = lastPrice; entryAuto = true; calc();
+    } catch (e) {
+      if (lastPrice) { $("entry").value = lastPrice; entryAuto = true; calc(); } else load();
+    } finally { b.disabled = false; b.textContent = "ราคาล่าสุด"; }
+  });
   $("entry").addEventListener("input", () => { entryAuto = false; calc(); });
   ["margin", "lev", "atr"].forEach(id => $(id).addEventListener("input", calc));
   $("form").addEventListener("submit", e => e.preventDefault());
